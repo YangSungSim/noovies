@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useEffect } from "react";
-import { Text, View, Dimensions, StyleSheet } from "react-native";
+import { Dimensions, StyleSheet, Share, TouchableOpacity, Platform } from "react-native";
 import styled from "styled-components/native";
 import { LinearGradient } from 'expo-linear-gradient';
 import { Movie, TV, moviesApi, tvApi } from "../api";
@@ -9,6 +9,8 @@ import { makeImgPath } from "../util";
 import { BLACK_COLOR } from "../colors";
 import { useQuery } from "react-query";
 import Loader from "../components/Loader";
+import { Ionicons } from "@expo/vector-icons"
+import * as WebBrowser from 'expo-web-browser';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -35,14 +37,26 @@ const Title = styled.Text`
     margin-left: 15px;
     font-weight: 500;
 `;
-const Overview = styled.Text`
-    color: ${(props) => props.theme.textColor};
-    margin-top: 30px;
+
+const Data = styled.View`
     padding: 0px 20px;
 `;
 
-const VideoBtn = styled.TouchableOpacity``;
-const BtnText = styled.Text``;
+const Overview = styled.Text`
+    color: ${(props) => props.theme.textColor};
+    margin: 20px 0px;
+`;
+
+const VideoBtn = styled.TouchableOpacity`
+    flex-direction: row;
+`;
+const BtnText = styled.Text`
+    color: white;
+    font-weight: 600;
+    margin-bottom: 10px;
+    line-height: 24px;
+    margin-left: 10px;
+`;
 
 
 type RootStackParamList = {
@@ -59,10 +73,42 @@ const Detail: React.FC<DetailScreenProps> = ({
         }
     } 
 }) => {
+    
     const isMovie = "original_title" in params;
     const {isLoading, data} = useQuery(
         [isMovie ? "movies": "tv", params.id], 
-        isMovie  ? moviesApi.detail: tvApi.detail);
+        isMovie  ? moviesApi.detail: tvApi.detail
+    ); 
+
+    const shareMedia = async () => {
+        const isAndroid = Platform.OS === "android";
+        const homepage = isMovie ? `https://www.imdb.com/title/${data.imdb_id}/`
+        : data.homepage;
+
+        if(isAndroid) {
+            await Share.share({
+                message:`${params.overview}\n Check it out: ${homepage}`,
+                title: 'original_title' in params 
+                ? params.original_title 
+                : params.original_name
+            })
+        } else {
+            await Share.share({
+                url:homepage,
+                title: 'original_title' in params 
+                ? params.original_title 
+                : params.original_name
+            })
+        }
+        
+    }
+    const ShareButton = () => (
+        <TouchableOpacity onPress={shareMedia}>
+            <Ionicons name="share-outline" color="white" size={24} />
+        </TouchableOpacity>
+    );
+    
+
 
     useEffect(() => {
         navigation.setOptions({ 
@@ -71,6 +117,20 @@ const Detail: React.FC<DetailScreenProps> = ({
             : "TV Show"
         });
     }, []);
+
+    useEffect(() => {
+        if (data) {
+            navigation.setOptions({ 
+                headerRight: () => <ShareButton />
+            });
+        }
+    }, [data]);
+
+    const openYTLink = async (videoID: string) => {
+        const baseUrl = `https://www.youtube.com/watch?v=${videoID}`;
+        await WebBrowser.openBrowserAsync(baseUrl);
+
+    }
     return (
         <Container>
             <Header>
@@ -90,13 +150,16 @@ const Detail: React.FC<DetailScreenProps> = ({
                 </Title>
                 </Column>
             </Header>
-            <Overview>{params.overview}</Overview>
-            {isLoading ? <Loader /> : null}
-            {data?.videos?.results?.map((video) => (
-                <VideoBtn key={video.key}>
-                    <BtnText>{video.name}</BtnText>
-                </VideoBtn>
-            ))}
+            <Data>
+                <Overview>{params.overview}</Overview>
+                {isLoading ? <Loader /> : null}
+                {data?.videos?.results?.map((video) => (
+                    <VideoBtn key={video.key} onPress={() => openYTLink(video.key)}>
+                        <Ionicons name="logo-youtube" color="white" size={24} />
+                        <BtnText>{video.name}</BtnText>
+                    </VideoBtn>
+                ))}
+            </Data>
         </Container>
     );
 };
